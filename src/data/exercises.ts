@@ -86,6 +86,7 @@ export const EXERCISES: Exercise[] = [
   { id: 'cable-chest-press', name: 'Standing cable chest press', equipment: ['cable2'], pattern: 'pushH', region: 'upper', defaultReps: 12,
     defaultKg: 15, loadNote: 'each stack',
     muscles: { chest: 1, triceps: 0.6, shoulders: 0.5, core: 0.4 } },
+];
 
 export const EXERCISE_BY_ID: Record<string, Exercise> = Object.fromEntries(EXERCISES.map((e) => [e.id, e]));
 

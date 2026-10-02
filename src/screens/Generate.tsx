@@ -21,10 +21,11 @@ export default function Generate() {
   const hist = useMemo(() => (sessions ? buildHistoryState(sessions) : EMPTY_HISTORY), [sessions]);
   const [msg, setMsg] = useState('');
 
-  if (!draft) return <Navigate to="/" replace />;
+  // A persisted draft may reference exercises that have since been removed.
+  const exs = draft?.slots.map((s) => EXERCISE_BY_ID[s.exerciseId]);
+  if (!draft || !exs || exs.some((e) => !e)) return <Navigate to="/" replace />;
 
   const pool = exercisePool(draft.equipment);
-  const exs = draft.slots.map((s) => EXERCISE_BY_ID[s.exerciseId]);
   const repsPerRound = draft.slots.reduce((a, s) => a + s.reps, 0);
 
   const update = (d: Partial<Draft>) => setDraft({ ...draft, ...d });
