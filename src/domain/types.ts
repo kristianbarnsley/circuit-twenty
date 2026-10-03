@@ -72,6 +72,16 @@ export interface Session {
   notes: string;
 }
 
+/** A named, reusable set of exercises. Reps and load come from defaults/history when loaded. */
+export interface SavedWorkout {
+  id: string;
+  name: string;
+  exerciseIds: string[];
+  createdAt: number;
+  updatedAt: number;
+  deletedAt?: number;
+}
+
 export interface ActiveRun {
   seed: number;
   equipment: Equipment[];

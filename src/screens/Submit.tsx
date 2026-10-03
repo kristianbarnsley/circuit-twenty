@@ -2,14 +2,14 @@ import { useRef, useState } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { MinusIcon, PlusIcon } from '../components/icons';
 import { Box, Header, Prompt } from '../components/ui';
-import { sessionRepo, useSessions } from '../db/repo';
+import { savedWorkoutRepo, sessionRepo, useSavedWorkouts, useSessions } from '../db/repo';
 import { WORKOUT_SECONDS, type Session } from '../domain/types';
 import {
   comparisonSession, fmtClock, fmtUnitsDelta, pacePerRound, repsFor, totalReps, units,
 } from '../engine/stats';
 import { useApp } from '../state/store';
 import { elapsedMs } from '../engine/timer';
-import { loadLabel, uuid } from './shared';
+import { findSavedWorkout, loadLabel, uuid } from './shared';
 
 const EFFORTS = ['EASY', 'OK', 'HARD', 'V.HARD', 'MAX'];
 
@@ -19,12 +19,16 @@ export default function Submit() {
   const setRun = useApp((s) => s.setRun);
   const setDraft = useApp((s) => s.setDraft);
   const sessions = useSessions();
+  const savedWorkouts = useSavedWorkouts();
   const [effort, setEffort] = useState(2);
   const [notes, setNotes] = useState('');
   // Allow fixing the count if a tap was missed during the workout.
   const [rounds, setRounds] = useState(run?.rounds ?? 0);
   const [confirmDiscard, setConfirmDiscard] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [workoutName, setWorkoutName] = useState('');
+  // The workout saved from this screen, kept so the panel can show it and offer undo.
+  const [savedAs, setSavedAs] = useState<{ id: string; name: string } | null>(null);
   // Set while leaving, so clearing the run doesn't trigger the no-run redirect below.
   const leaving = useRef(false);
 
@@ -40,6 +44,25 @@ export default function Submit() {
   };
   const cmp = sessions ? comparisonSession(sessions, draft) : null;
   const delta = cmp ? units(draft, n) - units(cmp.session, cmp.session.exercises.length) : null;
+
+  const exerciseIds = run.exercises.map((e) => e.exerciseId);
+  const existing = savedWorkouts ? findSavedWorkout(savedWorkouts, exerciseIds) : undefined;
+  const showSaveAs = !!savedWorkouts && (!existing || existing.id === savedAs?.id);
+  const trimmedName = workoutName.trim();
+  const nameTaken = !!savedWorkouts?.some((w) => w.name.toLowerCase() === trimmedName.toLowerCase());
+
+  const saveWorkout = async () => {
+    if (!trimmedName || nameTaken) return;
+    const now = Date.now();
+    const w = { id: uuid(), name: trimmedName, exerciseIds, createdAt: now, updatedAt: now };
+    await savedWorkoutRepo.add(w);
+    setSavedAs({ id: w.id, name: w.name });
+  };
+  const undoSaveWorkout = async () => {
+    if (!savedAs) return;
+    await savedWorkoutRepo.remove(savedAs.id);
+    setSavedAs(null);
+  };
 
   const save = async () => {
     setSaving(true);
@@ -126,6 +149,35 @@ export default function Submit() {
             onChange={(e) => setNotes(e.target.value)}
           />
         </div>
+
+        {showSaveAs && (
+          <Box label="save.as_workout" meta="optional" style={{ gap: 10, paddingTop: 20, borderColor: savedAs ? undefined : 'var(--line)' }}>
+            {savedAs ? (
+              <div className="row" style={{ minHeight: 48, borderBottom: 0 }}>
+                <span className="hi">[ok] saved as <b style={{ color: 'var(--text-strong)' }}>{savedAs.name}</b></span>
+                <button type="button" className="link-btn" style={{ padding: '0 8px' }} onClick={undoSaveWorkout}>undo</button>
+              </div>
+            ) : (
+              <>
+                <label htmlFor="wname" style={{ fontSize: 12, color: 'var(--subtle)' }}>Name this circuit to run it again from NEW › SAVED</label>
+                <div className="save-row">
+                  <input
+                    id="wname"
+                    type="text"
+                    maxLength={24}
+                    autoComplete="off"
+                    placeholder="e.g. Thruster burner"
+                    value={workoutName}
+                    onChange={(e) => setWorkoutName(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') saveWorkout(); }}
+                  />
+                  <button type="button" className="btn" onClick={saveWorkout} disabled={!trimmedName || nameTaken}>+ SAVE</button>
+                </div>
+                {nameTaken && <span className="toast err">! name already used</span>}
+              </>
+            )}
+          </Box>
+        )}
 
         <div className="spacer" />
 

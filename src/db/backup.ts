@@ -1,12 +1,14 @@
-import type { Session } from '../domain/types';
+import type { SavedWorkout, Session } from '../domain/types';
 import { db } from './db';
-import { sessionRepo } from './repo';
+import { savedWorkoutRepo, sessionRepo } from './repo';
 
 interface BackupFile {
   app: 'circuit20';
   version: 1;
   exportedAt: string;
   sessions: Session[];
+  /** Missing from backups made before saved workouts existed. */
+  savedWorkouts?: SavedWorkout[];
 }
 
 /** Share the backup via the share sheet where supported, else download it. */
@@ -16,6 +18,7 @@ export async function exportBackup(): Promise<void> {
     version: 1,
     exportedAt: new Date().toISOString(),
     sessions: await db.sessions.toArray(),
+    savedWorkouts: await db.savedWorkouts.toArray(),
   };
   const name = `circuit20-${new Date().toISOString().slice(0, 10)}.json`;
   const file = new File([JSON.stringify(data, null, 2)], name, { type: 'application/json' });
@@ -39,5 +42,6 @@ export async function exportBackup(): Promise<void> {
 export async function importBackup(file: File): Promise<number> {
   const data = JSON.parse(await file.text()) as Partial<BackupFile>;
   if (data.app !== 'circuit20' || !Array.isArray(data.sessions)) throw new Error('not a Circuit//20 backup');
+  if (Array.isArray(data.savedWorkouts)) await savedWorkoutRepo.merge(data.savedWorkouts);
   return sessionRepo.merge(data.sessions);
 }
